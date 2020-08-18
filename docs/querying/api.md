@@ -57,8 +57,8 @@ Names of query parameters that may be repeated end with `[]`.
 selectors](basics.md#time-series-selectors) like `http_requests_total` or
 `http_requests_total{method=~"(GET|POST)"}` and need to be URL-encoded.
 
-`<duration>` placeholders refer to Prometheus duration strings of the form
-`[0-9]+[smhdwy]`. For example, `5m` refers to a duration of 5 minutes.
+`<duration>` placeholders refer to [Prometheus duration strings](basics.md#time_durations).
+For example, `5m` refers to a duration of 5 minutes.
 
 `<bool>` placeholders refer to boolean values (strings `true` and `false`).
 
@@ -236,7 +236,7 @@ The following example returns all series that match either of the selectors
 `up` or `process_start_time_seconds{job="prometheus"}`:
 
 ```json
-$ curl -g 'http://localhost:9090/api/v1/series?' --data-urlencode='match[]=up' --data-urlencode='match[]=process_start_time_seconds{job="prometheus"}'
+$ curl -g 'http://localhost:9090/api/v1/series?' --data-urlencode 'match[]=up' --data-urlencode 'match[]=process_start_time_seconds{job="prometheus"}'
 {
    "status" : "success",
    "data" : [
@@ -267,6 +267,12 @@ The following endpoint returns a list of label names:
 GET /api/v1/labels
 POST /api/v1/labels
 ```
+
+URL query parameters:
+
+- `start=<rfc3339 | unix_timestamp>`: Start timestamp. Optional.
+- `end=<rfc3339 | unix_timestamp>`: End timestamp. Optional.
+
 
 The `data` section of the JSON response is a list of string label names.
 
@@ -309,6 +315,12 @@ The following endpoint returns a list of label values for a provided label name:
 ```
 GET /api/v1/label/<label_name>/values
 ```
+
+URL query parameters:
+
+- `start=<rfc3339 | unix_timestamp>`: Start timestamp. Optional.
+- `end=<rfc3339 | unix_timestamp>`: End timestamp. Optional.
+
 
 The `data` section of the JSON response is a list of string label values.
 
@@ -482,6 +494,9 @@ guarantees as the overarching API v1.
 GET /api/v1/rules
 ```
 
+URL query parameters:
+- `type=alert|record`: return only the alerting rules (e.g. `type=alert`) or the recording rules (e.g. `type=record`). When the parameter is absent or empty, no filtering is done.
+
 ```json
 $ curl http://localhost:9090/api/v1/rules
 
@@ -520,7 +535,7 @@ $ curl http://localhost:9090/api/v1/rules
                     {
                         "health": "ok",
                         "name": "job:http_inprogress_requests:sum",
-                        "query": "sum(http_inprogress_requests) by (job)",
+                        "query": "sum by (job) (http_inprogress_requests)",
                         "type": "recording"
                     }
                 ],
@@ -569,7 +584,7 @@ $ curl http://localhost:9090/api/v1/alerts
 
 ## Querying target metadata
 
-The following endpoint returns metadata about metrics currently scraped by targets.
+The following endpoint returns metadata about metrics currently scraped from targets.
 This is **experimental** and might change in the future.
 
 ```
@@ -650,6 +665,77 @@ curl -G http://localhost:9091/api/v1/targets/metadata \
     },
     // ...
   ]
+}
+```
+
+## Querying metric metadata
+
+It returns metadata about metrics currently scrapped from targets. However, it does not provide any target information.
+This is considered **experimental** and might change in the future.
+
+```
+GET /api/v1/metadata
+```
+
+URL query parameters:
+
+- `limit=<number>`: Maximum number of metrics to return.
+- `metric=<string>`: A metric name to filter metadata for. All metric metadata is retrieved if left empty.
+
+The `data` section of the query result consists of an object where each key is a metric name and each value is a list of unique metadata objects, as exposed for that metric name across all targets.
+
+The following example returns two metrics. Note that the metric `http_requests_total` has more than one object in the list. At least one target has a value for `HELP` that do not match with the rest.
+
+```json
+curl -G http://localhost:9090/api/v1/metadata?limit=2
+
+{
+  "status": "success",
+  "data": {
+    "cortex_ring_tokens": [
+      {
+        "type": "gauge",
+        "help": "Number of tokens in the ring",
+        "unit": ""
+      }
+    ],
+    "http_requests_total": [
+      {
+        "type": "counter",
+        "help": "Number of HTTP requests",
+        "unit": ""
+      },
+      {
+        "type": "counter",
+        "help": "Amount of HTTP requests",
+        "unit": ""
+      }
+    ]
+  }
+}
+```
+
+The following example returns metadata only for the metric `http_requests_total`.
+
+```json
+curl -G http://localhost:9090/api/v1/metadata?metric=http_requests_total
+
+{
+  "status": "success",
+  "data": {
+    "http_requests_total": [
+      {
+        "type": "counter",
+        "help": "Number of HTTP requests",
+        "unit": ""
+      },
+      {
+        "type": "counter",
+        "help": "Amount of HTTP requests",
+        "unit": ""
+      }
+    ]
+  }
 }
 ```
 
@@ -797,6 +883,8 @@ $ curl http://localhost:9090/api/v1/status/buildinfo
 
 **NOTE**: The exact returned build properties may change without notice between Prometheus versions.
 
+*New in v2.14*
+
 ### TSDB Stats
 
 The following endpoint returns various cardinality statistics about the Prometheus TSDB:
@@ -858,7 +946,7 @@ $ curl http://localhost:9090/api/v1/status/tsdb
 }
 ```
 
-*New in v2.14*
+*New in v2.15*
 
 ## TSDB Admin APIs
 These are APIs that expose database functionalities for the advanced user. These APIs are not enabled unless the `--web.enable-admin-api` is set.
